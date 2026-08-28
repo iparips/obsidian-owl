@@ -1,0 +1,121 @@
+import { beforeEach, describe, expect, it, Mock, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { SessionPanel, RecorderPort } from './SessionPanel'
+import { Outcome, Outcomes } from '../engine/outcome'
+
+describe('SessionPanel', () => {
+  let recorder: RecorderPort
+  let transcribe: Mock<[Blob, string], Promise<Outcome<string>>>
+  let processUtterance: Mock<[string], Promise<Outcome<string>>>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    recorder = {
+      start: vi.fn().mockResolvedValue(Outcomes.success(undefined)),
+      stop: vi.fn().mockResolvedValue({ blob: new Blob(['a']), mimeType: 'audio/webm' }),
+      cancel: vi.fn(),
+    }
+    transcribe = vi.fn().mockResolvedValue(Outcomes.success('spoken words'))
+    processUtterance = vi.fn().mockResolvedValue(Outcomes.success('made the edit'))
+  })
+
+  const renderPanel = () =>
+    render(
+      <SessionPanel
+        noteName="note"
+        recorder={recorder}
+        transcribe={transcribe}
+        processUtterance={processUtterance}
+      />,
+    )
+
+  describe('when using the mic', () => {
+    it('transitions to recording when the mic button is clicked in idle', async () => {
+      renderPanel()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+
+      expect(screen.getByRole('button', { name: 'Stop recording' })).toBeTruthy()
+    })
+
+    it('transitions to transcribing when the mic is clicked while recording', async () => {
+      let resolveTranscribe: (value: Outcome<string>) => void = () => undefined
+      transcribe.mockReturnValue(
+        new Promise<Outcome<string>>((resolve) => (resolveTranscribe = resolve)),
+      )
+      renderPanel()
+      await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+
+      await userEvent.click(screen.getByRole('button', { name: 'Stop recording' }))
+
+      expect(screen.getByRole('button', { name: 'Record' }).hasAttribute('disabled')).toBe(true)
+      resolveTranscribe(Outcomes.success('spoken words'))
+      await waitFor(() => expect(screen.getByText('made the edit')).toBeTruthy())
+    })
+
+    it('returns to idle when cancel is clicked while recording', async () => {
+      renderPanel()
+      await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      expect(recorder.cancel).toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: 'Record' }).hasAttribute('disabled')).toBe(false)
+    })
+
+    it('renders a user entry when the transcript arrives', async () => {
+      renderPanel()
+      await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+
+      await userEvent.click(screen.getByRole('button', { name: 'Stop recording' }))
+
+      await waitFor(() => expect(screen.getByText('spoken words')).toBeTruthy())
+    })
+
+    it('renders an assistant entry when the turn summary arrives', async () => {
+      renderPanel()
+      await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+
+      await userEvent.click(screen.getByRole('button', { name: 'Stop recording' }))
+
+      await waitFor(() => expect(screen.getByText('made the edit')).toBeTruthy())
+    })
+
+    it('renders an error entry naming the step when an outcome fails', async () => {
+      processUtterance.mockResolvedValue(Outcomes.failure('chat', 'model unavailable'))
+      renderPanel()
+      await userEvent.click(screen.getByRole('button', { name: 'Record' }))
+
+      await userEvent.click(screen.getByRole('button', { name: 'Stop recording' }))
+
+      await waitFor(() => expect(screen.getByText('chat failed: model unavailable')).toBeTruthy())
+    })
+  })
+
+  describe('when typing', () => {
+    it('disables the send button while a turn is thinking', async () => {
+      let resolveTurn: (value: Outcome<string>) => void = () => undefined
+      processUtterance.mockReturnValue(
+        new Promise<Outcome<string>>((resolve) => (resolveTurn = resolve)),
+      )
+      renderPanel()
+      await userEvent.type(screen.getByRole('textbox', { name: 'Instruction' }), 'do it')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+      expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true)
+      resolveTurn(Outcomes.success('ok'))
+      await waitFor(() => expect(screen.getByText('ok')).toBeTruthy())
+    })
+
+    it('submits typed text when send is clicked in idle', async () => {
+      renderPanel()
+      await userEvent.type(screen.getByRole('textbox', { name: 'Instruction' }), 'rename heading')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+      await waitFor(() => expect(processUtterance).toHaveBeenCalledWith('rename heading'))
+    })
+  })
+})

@@ -1,0 +1,39 @@
+{
+  "name": "obsidian-voice-edit",
+  "version": "0.1.0",
+  "description": "Edit the active note with natural-language voice or text instructions.",
+  "main": "main.js",
+  "scripts": {
+    "build": "bun run test && bun run build:no-tests",
+    "build:no-tests": "bun run lint && bun run format && bun build src/main.ts --outdir . --entry-naming \"[name].[ext]\" --external obsidian --format cjs --sourcemap",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write . --log-level warn",
+    "test": "vitest run --reporter=verbose --no-watch"
+  },
+  "keywords": [],
+  "author": "Ilya Paripsa",
+  "license": "AGPL",
+  "devDependencies": {
+    "obsidian": ">=1.5.0",
+    "@testing-library/dom": "^10.0.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "@typescript-eslint/eslint-plugin": "5.29.0",
+    "@typescript-eslint/parser": "5.29.0",
+    "eslint": "^8.57.0",
+    "happy-dom": "^20.0.0",
+    "prettier": "^3.5.3",
+    "tslib": "2.4.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.3.1"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}

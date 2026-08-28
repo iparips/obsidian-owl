@@ -1,0 +1,33 @@
+# npm / bun
+node_modules
+
+# Don't include the compiled main.js file in the repo.
+# It should be uploaded to GitHub releases instead.
+main.js
+
+# Exclude sourcemaps
+*.map
+
+# obsidian (data.json holds the API key)
+data.json
+
+# local env files
+.env
+.env.*
+
+# test output
+coverage
+
+# logs
+*.log
+
+# IDEs
+.vscode
+.idea
+*.iml
+
+# macOS
+.DS_Store
+
+# AI assistants
+.claude/settings.local.json
