@@ -2,42 +2,11 @@
 
 An Obsidian plugin that edits the active note from natural-language instructions, spoken or typed. Speak "rename heading Budget to Costs" or "add a list A, B, C under heading X" and the note changes. Dictated content lands formatted as markdown. Powered by Mistral speech-to-text and chat models, using your own API key.
 
-Specs live in [spec/1-voice-note-editing](spec/1-voice-note-editing/1-requirements.md).
+Specs live in [docs/spec/1-voice-note-editing](docs/spec/1-voice-note-editing/1-requirements.md).
 
-## Prerequisites
+## Install for Development
 
-- [Bun](https://bun.sh) installed
-- Obsidian 1.5.0 or newer on desktop
-- A [Mistral API key](https://console.mistral.ai/)
-
-## Build and Test
-
-```bash
-bun install         # once, installs dependencies
-bun run test        # run the unit test suite
-bun run lint        # eslint
-bun run build       # test + lint + format + bundle to main.js
-```
-
-The build produces main.js at the repo root, next to manifest.json and styles.css. Those three files are the plugin.
-
-## Link Into Desktop Obsidian
-
-Symlink the repo into your vault's plugin folder, so every rebuild is picked up without copying:
-
-```bash
-ln -s "$(pwd)" "<your-vault>/.obsidian/plugins/obsidian-voice-edit"
-```
-
-Run it from the repo root, replacing `<your-vault>` with your vault's path.
-
-Then in Obsidian:
-
-1. Settings, Community plugins: turn off Restricted mode if it is on.
-2. Refresh installed plugins and enable Voice Edit.
-3. Settings, Voice Edit: paste your Mistral API key.
-
-After a rebuild, reload the plugin: toggle it off and on in Community plugins, or run the "Reload app without saving" command.
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for prerequisites, build commands, and how to symlink the repo into a vault.
 
 ## Test It Out
 
@@ -55,3 +24,7 @@ If a step fails, the panel shows an error entry naming the failing step: transcr
 - Mic errors: macOS needs microphone permission for Obsidian under System Settings, Privacy and Security.
 - 401 errors: check the API key in settings.
 - "note is not open in an editor": the session's note must stay open in a tab while you edit.
+
+## Releasing
+
+See [docs/RELEASE.md](docs/RELEASE.md).

@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+#
+# Symlinks this repo into an Obsidian vault's plugins directory.
+#
+# Reads OBSIDIAN_VAULT_PATH from .env. Copy .env.example to .env and set it.
+
+set -euo pipefail
+
+# -P resolves symlinks and the on-disk casing, so the comparison in
+# link_plugin is stable however the script was invoked. macOS paths are
+# case-insensitive, so a differently-cased invocation must not repoint.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ENV_FILE="$REPO_ROOT/.env"
+
+# Prints an error block to stderr and exits. First argument is the headline,
+# remaining arguments are lines beneath it.
+fail() {
+	local headline="$1"
+	shift
+
+	echo "" >&2
+	echo "$headline" >&2
+	local line
+	for line in "$@"; do
+		echo "$line" >&2
+	done
+	echo "" >&2
+	exit 1
+}
+
+load_env() {
+	if [[ ! -f "$ENV_FILE" ]]; then
+		fail "Cannot install: no .env file found." \
+			"" \
+			"This file tells the installer which vault to link into." \
+			"It is gitignored, so each machine sets its own." \
+			"" \
+			"To create it:" \
+			"  1. cp .env.example .env" \
+			"  2. Set OBSIDIAN_VAULT_PATH to your vault folder" \
+			"  3. ./install"
+	fi
+	set -a
+	# shellcheck disable=SC1090
+	source "$ENV_FILE"
+	set +a
+
+	if [[ -z "${OBSIDIAN_VAULT_PATH:-}" ]]; then
+		fail "Cannot install: OBSIDIAN_VAULT_PATH is not set." \
+			"" \
+			"Set it in:" \
+			"  $ENV_FILE" \
+			"" \
+			"It must point at the folder containing your vault's .obsidian" \
+			"directory, for example:" \
+			"  OBSIDIAN_VAULT_PATH=/Users/you/ObsidianVault/Personal"
+	fi
+}
+
+plugin_id() {
+	grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' "$REPO_ROOT/manifest.json" |
+		head -1 |
+		sed 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/'
+}
+
+# Obsidian loads a plugin from these three files. Without all of them the
+# symlinked directory loads as a broken plugin.
+PLUGIN_FILES=(main.js manifest.json styles.css)
+
+check_build() {
+	local missing=()
+
+	for file in "${PLUGIN_FILES[@]}"; do
+		[[ -f "$REPO_ROOT/$file" ]] || missing+=("$file")
+	done
+
+	if [[ ${#missing[@]} -gt 0 ]]; then
+		fail "Cannot install: the plugin has not been built." \
+			"" \
+			"Missing: ${missing[*]}" \
+			"" \
+			"Obsidian loads the plugin from main.js, manifest.json and" \
+			"styles.css. Linking without them gives a broken plugin." \
+			"" \
+			"To fix:" \
+			"  1. bun run build" \
+			"  2. ./install"
+	fi
+}
+
+check_vault() {
+	if [[ ! -d "$OBSIDIAN_VAULT_PATH/.obsidian" ]]; then
+		fail "Cannot install: that path is not an Obsidian vault." \
+			"" \
+			"  $OBSIDIAN_VAULT_PATH" \
+			"" \
+			"It has no .obsidian directory. OBSIDIAN_VAULT_PATH must point at" \
+			"the vault folder itself, not the plugins folder inside it." \
+			"" \
+			"Check the value in:" \
+			"  $ENV_FILE"
+	fi
+}
+
+# True when both paths are the same directory on disk, following symlinks.
+same_dir() {
+	local a b
+	a="$(cd "$1" 2>/dev/null && pwd -P)" || return 1
+	b="$(cd "$2" 2>/dev/null && pwd -P)" || return 1
+	[[ "$a" == "$b" ]] && return 0
+
+	# Case-insensitive volumes report different spellings of one directory.
+	# Inode plus device settles it.
+	local ia ib
+	ia="$(stat -f '%d:%i' "$a" 2>/dev/null)" || return 1
+	ib="$(stat -f '%d:%i' "$b" 2>/dev/null)" || return 1
+	[[ "$ia" == "$ib" ]]
+}
+
+link_plugin() {
+	local target="$1"
+
+	if [[ -e "$target" && ! -L "$target" ]]; then
+		if [[ -d "$target" ]]; then
+			fail "Cannot install: a real plugin directory already exists at" \
+				"  $target" \
+				"" \
+				"This is most likely an install from the Community Plugins store." \
+				"It may contain data.json, which holds your API key and settings." \
+				"" \
+				"To replace it with a link to this repo:" \
+				"  1. Back up data.json if you want to keep your settings" \
+				"  2. rm -rf \"$target\"" \
+				"  3. ./install"
+		fi
+
+		fail "Cannot install: a file is in the way at" \
+			"  $target" \
+			"" \
+			"A plugin lives in a directory, so this file is not an install." \
+			"Check it is not something you meant to keep, then:" \
+			"  1. rm \"$target\"" \
+			"  2. ./install"
+	fi
+
+	# Already linked here: nothing to do. Compared by inode, because macOS
+	# paths are case-insensitive and a differently-cased but identical path
+	# must not count as a change.
+	if [[ -L "$target" ]] && same_dir "$target" "$REPO_ROOT"; then
+		echo "Already linked: $target -> $(readlink "$target")"
+		return
+	fi
+
+	if [[ -L "$target" ]]; then
+		echo "Repointing $target from $(readlink "$target")"
+	fi
+
+	mkdir -p "$(dirname "$target")"
+	# -h stops ln following an existing link and nesting inside the target.
+	ln -sfh "$REPO_ROOT" "$target"
+	echo "Linked $target -> $REPO_ROOT"
+	echo "Now enable Voice Edit in Obsidian: Settings, Community plugins, refresh, enable."
+}
+
+main() {
+	load_env
+	check_build
+	check_vault
+	link_plugin "$OBSIDIAN_VAULT_PATH/.obsidian/plugins/$(plugin_id)"
+}
+
+main "$@"
